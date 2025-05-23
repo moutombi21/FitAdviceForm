@@ -4,7 +4,7 @@ const fileSchema = new mongoose.Schema({
   originalname: { type: String, required: true },
   mimetype: { type: String, required: true },
   size: { type: Number, required: true },
-  buffer: { type: Buffer, required: true } // Si tu veux stocker directement le fichier
+  buffer: { type: Buffer, required: true } 
 }, { _id: false });
 
 const FormSubmissionSchema = new mongoose.Schema({
@@ -64,7 +64,8 @@ const FormSubmissionSchema = new mongoose.Schema({
   taxNumber: {
     type: String,
     required: true,
-    trim: true
+    trim: true,
+    unique: true,
   },
   vatNumber: {
     type: String,

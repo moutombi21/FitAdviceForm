@@ -8,6 +8,8 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 
+import { sendEmail } from './utils/sendEmail.js';
+
 // Charger les variables d'environnement
 dotenv.config({ path: './.env' });
 
@@ -18,6 +20,7 @@ const MONGODB_URI = process.env.MONGODB_URI;
 
 // Dossier uploads
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
+
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
@@ -26,7 +29,7 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 const connectDB = async () => {
   try {
     await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 5001,
+      serverSelectionTimeoutMS: 5000,
       retryWrites: true,
       w: 'majority'
     });
@@ -37,21 +40,25 @@ const connectDB = async () => {
   }
 };
 
-// Modèle Mongoose
+// Schéma Mongoose
 const formSchema = new mongoose.Schema({
   firstName: String,
   lastName: String,
   email: { type: String, unique: true },
   phone: String,
+
   address: String,
   city: String,
   zipCode: String,
   country: String,
+
   taxNumber: String,
   vatNumber: String,
   bankDetails: String,
+
   hourlyRate: Number,
   halfHourRate: Number,
+
   identityDocument: [{
     originalname: String,
     mimetype: String,
@@ -94,6 +101,7 @@ const formSchema = new mongoose.Schema({
     path: String,
     filename: String
   }],
+
   ipAddress: String,
   userAgent: String
 }, { timestamps: true });
@@ -101,29 +109,35 @@ const formSchema = new mongoose.Schema({
 const FormSubmission = mongoose.model('FormSubmission', formSchema);
 
 // Middleware
-await app.register(helmet);
-await app.register(cors, {
-  origin: FRONTEND_URL,
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-});
-await app.register(rateLimit, {
-  timeWindow: '15 minutes',
-  max: 100,
-  errorResponse: { success: false, message: 'Too many requests from this IP' }
-});
-await app.register(multipart, {
-  limits: {
-    fileSize: 20 * 1024 * 1024 // 10 MB par fichier (modifiable selon ton besoin)
-  }
-});
+await Promise.all([
+  app.register(helmet),
+  app.register(cors, {
+    origin: FRONTEND_URL,
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+  }),
+  app.register(rateLimit, {
+    timeWindow: '15 minutes',
+    max: 100,
+    errorResponse: { success: false, message: 'Too many requests from this IP' }
+  }),
+  app.register(multipart, {
+    limits: {
+      fileSize: 20 * 1024 * 1024 // 20 MB
+    }
+  })
+]);
 
+// Hook de logging global
+app.addHook('onRequest', (req, reply, done) => {
+  console.log(`[${req.method}] ${req.url}`);
+  done();
+});
 
 // Route POST pour soumettre le formulaire
 app.post('/api/submit-form', async (req, reply) => {
   try {
-    const parts = req.parts();
     const body = {};
     const files = {
       identityDocument: [],
@@ -134,10 +148,11 @@ app.post('/api/submit-form', async (req, reply) => {
       companyStatutes: []
     };
 
-    for await (const part of parts) {
+    for await (const part of req.parts()) {
       if (part.file) {
         const savePath = path.join(UPLOADS_DIR, `${Date.now()}-${part.filename}`);
         const writeStream = fs.createWriteStream(savePath);
+
         await new Promise((resolve, reject) => {
           part.file.pipe(writeStream);
           part.file.on('end', resolve);
@@ -147,7 +162,7 @@ app.post('/api/submit-form', async (req, reply) => {
         const fileData = {
           originalname: part.filename,
           mimetype: part.mimetype,
-          size: part.file.bytesRead || 0,
+          size: part.file.bytesRead,
           path: savePath,
           filename: path.basename(savePath)
         };
@@ -155,7 +170,7 @@ app.post('/api/submit-form', async (req, reply) => {
         if (files[part.fieldname]) {
           files[part.fieldname].push(fileData);
         }
-      } else {
+      } else if (part.value) {
         body[part.fieldname] = part.value;
       }
     }
@@ -164,24 +179,31 @@ app.post('/api/submit-form', async (req, reply) => {
       ...body,
       ...files,
       ipAddress: req.ip,
-      userAgent: req.headers['user-agent'] || 'Unknown'
+      userAgent: req.headers['user-agent'] || 'Unknown User Agent'
     });
 
     await submission.save();
 
-    return reply.send({
+    await sendEmail(submission);
+
+    return reply.status(201).send({
       success: true,
       message: 'Form submitted successfully!',
-      data: { id: submission._id }
+      data: {
+        id: submission._id
+      }
     });
 
   } catch (error) {
-    console.error('Error submitting form:', error);
-    return reply.status(500).send({ success: false, message: 'Internal server error' });
+    console.error('Error submitting form:', error.message);
+    return reply.status(500).send({
+      success: false,
+      message: 'Internal server error'
+    });
   }
 });
 
-// Route GET pour récupérer toutes les soumissions
+// Route GET pour récupérer les soumissions
 app.get('/api/submissions', {}, async (req, reply) => {
   try {
     const submissions = await FormSubmission.find({})
@@ -196,7 +218,7 @@ app.get('/api/submissions', {}, async (req, reply) => {
     });
 
   } catch (error) {
-    console.error('Fetch error:', error);
+    console.error('Fetch error:', error.message);
     return reply.status(500).send({
       success: false,
       message: 'Failed to fetch submissions'
@@ -204,26 +226,21 @@ app.get('/api/submissions', {}, async (req, reply) => {
   }
 });
 
-// Gestion des erreurs globales
+// Gestion des erreurs centralisée
 app.setErrorHandler((error, req, reply) => {
-  console.error('🚨 Global error:', error.stack);
+  console.error('Global error:', error.stack);
   return reply.status(500).send({
     success: false,
     message: 'An unexpected error occurred'
   });
 });
 
-// Gestion des routes 404
+// Gestion des routes inconnues
 app.setNotFoundHandler((req, reply) => {
   return reply.status(404).send({
     success: false,
     message: 'Endpoint not found'
   });
-});
-
-app.addHook('onRequest', (req, reply, done) => {
-  console.log(`[${req.method}] ${req.url}`);
-  done();
 });
 
 // Démarrage du serveur
@@ -232,10 +249,10 @@ const startServer = async () => {
 
   try {
     await app.listen({ port: PORT });
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`🌐 Allowed frontend: ${FRONTEND_URL}`);
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Allowed frontend: ${FRONTEND_URL}`);
   } catch (err) {
-    console.error('❌ Failed to start server:', err.message);
+    console.error('Failed to start server:', err.message);
     process.exit(1);
   }
 };

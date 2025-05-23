@@ -67,7 +67,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
     try {
       setLoading(true);
 
-      // Création d'un objet FormData pour gérer les fichiers
+
       const finalData = new FormData();
 
       console.log('FormData to submit:', formData);
@@ -89,7 +89,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
         }
       }
 
-      const response = await fetch('http://localhost:5001/api/submit-form', {
+      const response = await fetch('/api/submit-form', {
         method: 'POST',
         body: finalData
       });
