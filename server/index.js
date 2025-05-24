@@ -15,7 +15,7 @@ dotenv.config({ path: './.env' });
 
 const app = fastify();
 const PORT = process.env.PORT || 5001;
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://0.0.0.0:5173';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const MONGODB_URI = process.env.MONGODB_URI;
 
 // Dossier uploads
@@ -33,9 +33,9 @@ const connectDB = async () => {
       retryWrites: true,
       w: 'majority'
     });
-    console.log('✅ MongoDB connected successfully');
+    console.log('MongoDB connected successfully');
   } catch (err) {
-    console.error('❌ MongoDB connection error:', err.message);
+    console.error('MongoDB connection error:', err.message);
     process.exit(1);
   }
 };
@@ -124,7 +124,7 @@ await Promise.all([
   }),
   app.register(multipart, {
     limits: {
-      fileSize: 20 * 1024 * 1024 // 20 MB
+      fileSize: 20 * 1024 * 1024 // 20 MB par fichier
     }
   })
 ]);
@@ -149,7 +149,7 @@ app.post('/api/submit-form', async (req, reply) => {
     };
 
     for await (const part of req.parts()) {
-      if (part.file) {
+      if (part.file && part.fieldname) {
         const savePath = path.join(UPLOADS_DIR, `${Date.now()}-${part.filename}`);
         const writeStream = fs.createWriteStream(savePath);
 
@@ -162,7 +162,7 @@ app.post('/api/submit-form', async (req, reply) => {
         const fileData = {
           originalname: part.filename,
           mimetype: part.mimetype,
-          size: part.file.bytesRead,
+          size: fs.statSync(savePath).size,
           path: savePath,
           filename: path.basename(savePath)
         };
@@ -170,7 +170,7 @@ app.post('/api/submit-form', async (req, reply) => {
         if (files[part.fieldname]) {
           files[part.fieldname].push(fileData);
         }
-      } else if (part.value) {
+      } else if (part.fieldname && typeof part.value === 'string') {
         body[part.fieldname] = part.value;
       }
     }
@@ -203,7 +203,7 @@ app.post('/api/submit-form', async (req, reply) => {
   }
 });
 
-// Route GET pour récupérer les soumissions
+// Route GET pour récupérer toutes les soumissions
 app.get('/api/submissions', {}, async (req, reply) => {
   try {
     const submissions = await FormSubmission.find({})
@@ -248,7 +248,7 @@ const startServer = async () => {
   await connectDB();
 
   try {
-    await app.listen({ port: PORT });
+    await app.listen({ port: PORT, host: '0.0.0.0' });
     console.log(`Server running on http://0.0.0.0:${PORT}`);
     console.log(`Allowed frontend: ${FRONTEND_URL}`);
   } catch (err) {
