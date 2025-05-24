@@ -89,7 +89,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
         }
       }
 
-      const response = await fetch('/api/submit-form', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/submit-form`, {
         method: 'POST',
         body: finalData
       });

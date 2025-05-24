@@ -15,7 +15,7 @@ dotenv.config({ path: './.env' });
 
 const app = fastify();
 const PORT = process.env.PORT || 5001;
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://0.0.0.0:5173';
 const MONGODB_URI = process.env.MONGODB_URI;
 
 // Dossier uploads
@@ -249,7 +249,7 @@ const startServer = async () => {
 
   try {
     await app.listen({ port: PORT });
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
     console.log(`Allowed frontend: ${FRONTEND_URL}`);
   } catch (err) {
     console.error('Failed to start server:', err.message);
