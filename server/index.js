@@ -14,11 +14,11 @@ import { sendEmail } from './utils/sendEmail.js';
 dotenv.config({ path: './.env' });
 
 const app = fastify();
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5002;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const MONGODB_URI = process.env.MONGODB_URI;
 
-// Dossier uploads
+// Dossier uploads – à utiliser en développement seulement
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
 
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -26,7 +26,7 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 }
 
 // Connexion MongoDB
-const connectDB = async () => {
+async function connectDB() {
   try {
     await mongoose.connect(MONGODB_URI, {
       serverSelectionTimeoutMS: 5000,
@@ -38,7 +38,7 @@ const connectDB = async () => {
     console.error('MongoDB connection error:', err.message);
     process.exit(1);
   }
-};
+}
 
 // Schéma Mongoose
 const formSchema = new mongoose.Schema({
@@ -108,34 +108,41 @@ const formSchema = new mongoose.Schema({
 
 const FormSubmission = mongoose.model('FormSubmission', formSchema);
 
-// Middleware
-await Promise.all([
-  app.register(helmet),
-  app.register(cors, {
-    origin: FRONTEND_URL,
-    methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
-  }),
-  app.register(rateLimit, {
-    timeWindow: '15 minutes',
-    max: 100,
-    errorResponse: { success: false, message: 'Too many requests from this IP' }
-  }),
-  app.register(multipart, {
-    limits: {
-      fileSize: 20 * 1024 * 1024 // 20 MB par fichier
-    }
-  })
-]);
+// Middleware avec gestion d'erreur
+try {
+  await Promise.all([
+    app.register(helmet),
+    app.register(cors, {
+      origin: FRONTEND_URL,
+      methods: ['GET', 'POST'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+      credentials: true
+    }),
+    app.register(rateLimit, {
+      timeWindow: '15 minutes',
+      max: 100,
+      errorResponse: { success: false, message: 'Too many requests from this IP' }
+    }),
+    app.register(multipart, {
+      limits: {
+        fileSize: 20 * 1024 * 1024 // 20 MB par fichier
+      }
+    })
+  ]);
 
-// Hook de logging global
+  console.log('✅ Middlewares registered');
+} catch (err) {
+  console.error('❌ Error registering middlewares:', err.message);
+  process.exit(1);
+}
+
+// Hook global de logging
 app.addHook('onRequest', (req, reply, done) => {
   console.log(`[${req.method}] ${req.url}`);
   done();
 });
 
-// Route POST pour soumettre le formulaire
+// Route POST – ✅ Bien définie
 app.post('/api/submit-form', async (req, reply) => {
   try {
     const body = {};
@@ -151,24 +158,27 @@ app.post('/api/submit-form', async (req, reply) => {
     for await (const part of req.parts()) {
       if (part.file && part.fieldname) {
         const savePath = path.join(UPLOADS_DIR, `${Date.now()}-${part.filename}`);
-        const writeStream = fs.createWriteStream(savePath);
 
-        await new Promise((resolve, reject) => {
-          part.file.pipe(writeStream);
-          part.file.on('end', resolve);
-          part.file.on('error', reject);
-        });
+        try {
+          const writeStream = fs.createWriteStream(savePath);
+          await new Promise((resolve, reject) => {
+            part.file.pipe(writeStream);
+            part.file.on('end', resolve);
+            part.file.on('error', reject);
+          });
 
-        const fileData = {
-          originalname: part.filename,
-          mimetype: part.mimetype,
-          size: fs.statSync(savePath).size,
-          path: savePath,
-          filename: path.basename(savePath)
-        };
+          // Ajoute le fichier au formData
+          files[part.fieldname].push({
+            originalname: part.filename,
+            mimetype: part.mimetype,
+            size: part.file.bytesRead,
+            path: savePath,
+            filename: path.basename(savePath)
+          });
 
-        if (files[part.fieldname]) {
-          files[part.fieldname].push(fileData);
+        } catch (err) {
+          console.error(`❌ Échec lors de l’enregistrement du fichier ${part.filename}:`, err.message);
+          return reply.status(500).send({ success: false, message: 'File upload failed' });
         }
       } else if (part.fieldname && typeof part.value === 'string') {
         body[part.fieldname] = part.value;
@@ -186,7 +196,7 @@ app.post('/api/submit-form', async (req, reply) => {
 
     await sendEmail(submission);
 
-    return reply.status(201).send({
+    return reply.send({
       success: true,
       message: 'Form submitted successfully!',
       data: {
@@ -203,8 +213,8 @@ app.post('/api/submit-form', async (req, reply) => {
   }
 });
 
-// Route GET pour récupérer toutes les soumissions
-app.get('/api/submissions', {}, async (req, reply) => {
+// Route GET pour récupérer les soumissions
+app.get('/api/submissions', async (req, reply) => {
   try {
     const submissions = await FormSubmission.find({})
       .select('-__v -updatedAt -ipAddress -userAgent')
@@ -228,14 +238,14 @@ app.get('/api/submissions', {}, async (req, reply) => {
 
 // Gestion des erreurs centralisée
 app.setErrorHandler((error, req, reply) => {
-  console.error('Global error:', error.stack);
+  console.error('🚨 Global error:', error.stack);
   return reply.status(500).send({
     success: false,
     message: 'An unexpected error occurred'
   });
 });
 
-// Gestion des routes inconnues
+// Route inconnue – ✅ Bien implémentée
 app.setNotFoundHandler((req, reply) => {
   return reply.status(404).send({
     success: false,
@@ -243,16 +253,17 @@ app.setNotFoundHandler((req, reply) => {
   });
 });
 
-// Démarrage du serveur
+// Démarrage du serveur – ✅ Doit être après toutes les routes
 const startServer = async () => {
   await connectDB();
 
   try {
+    await app.ready(); // ⚠️ Important : attend que toutes les routes soient chargées
     await app.listen({ port: PORT, host: '0.0.0.0' });
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
-    console.log(`Allowed frontend: ${FRONTEND_URL}`);
+    console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
+    console.log(`🌐 Allowed frontend: ${FRONTEND_URL}`);
   } catch (err) {
-    console.error('Failed to start server:', err.message);
+    console.error('❌ Failed to start server:', err.message);
     process.exit(1);
   }
 };

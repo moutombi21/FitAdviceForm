@@ -43,88 +43,122 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
   const { register, handleSubmit, formState: { errors }, reset } = useForm<FormData>();
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState<FormData | null>(null);
+
+  // initialisation de forData avec valeur par defaut
+  const [formData, setFormData] = useState<FormData>({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    zipCode: '',
+    country: '',
+    taxNumber: '',
+    vatNumber: '',
+    bankDetails: '',
+    hourlyRate: 0,
+    halfHourRate: 0,
+    identityDocument: new DataTransfer().files as FileList,
+    residencyProof: new DataTransfer().files as FileList,
+    qualifications: new DataTransfer().files as FileList,
+    businessPermit: new DataTransfer().files as FileList,
+    liabilityInsurance: new DataTransfer().files as FileList,
+    companyStatutes: new DataTransfer().files as FileList
+  });
   
   const onSubmitStep1 = (data: Partial<FormData>) => {
-    setFormData(prev => ({ ...prev, ...data } as FormData));
+    setFormData({
+      ...formData,
+      firstName: data.firstName || formData.firstName,
+      lastName: data.lastName || formData.lastName,
+      email: data.email || formData.email,
+      identityDocument: data.identityDocument || formData.identityDocument
+    })
     setCurrentStep(2);
     window.scrollTo(0, 0);
   };
 
   const onSubmitStep2 = (data: Partial<FormData>) => {
-    setFormData(prev => ({ ...prev, ...data } as FormData));
+    setFormData({
+      ...formData, 
+      address: data.address || formData.address,
+      city: data.city || formData.city,
+      zipCode: data.zipCode || formData.zipCode,
+      country: data.country || formData.country,
+      residencyProof: data.residencyProof || formData.residencyProof
+    });
     setCurrentStep(3);
     window.scrollTo(0, 0);
   };
 
   const onSubmitStep3 = (data: Partial<FormData>) => {
-    setFormData(prev => ({ ...prev, ...data } as FormData));
+    setFormData({
+      ...formData,
+      taxNumber: data.taxNumber || formData.taxNumber,
+      vatNumber: data.vatNumber || formData.vatNumber,
+      bankDetails: data.bankDetails || formData.bankDetails,
+      hourlyRate: data.hourlyRate !== undefined ? data.hourlyRate : formData.hourlyRate,
+      halfHourRate: data.halfHourRate !== undefined ? data.halfHourRate : formData.halfHourRate,
+      qualifications: data.qualifications || formData.qualifications,
+      businessPermit: data.businessPermit || formData.businessPermit,
+      liabilityInsurance: data.liabilityInsurance || formData.liabilityInsurance,
+      companyStatutes: data.companyStatutes || formData.companyStatutes
+    });
     setCurrentStep(4);
+    window.scrollTo(0,0);
+  };
+
+  const goBack = () => {
+    setCurrentStep(currentStep - 1);
     window.scrollTo(0, 0);
   };
 
-  const onSubmitFinal = async () => {
+    const onSubmitFinal = async () => {
     try {
       setLoading(true);
 
-
       const finalData = new FormData();
 
-      console.log('FormData to submit:', formData);
+      for (const key in formData) {
+        const value = (formData as any)[key];
 
-      // champs de texte
-      if (formData) {
-        for (const key in formData) {
-          const value = (formData as any)[key];
-
-          if (value instanceof FileList) {
-            for (let i = 0; i < value.length; i++) {
-              finalData.append(key, value[i]);
-            }
-          } else if (typeof value === 'number') {
-            finalData.append(key, value.toString()); // en string
-          } else if (typeof value === 'string') {
-            finalData.append(key, value);
+        if (value instanceof FileList && value.length > 0) {
+          for (let i = 0; i < value.length; i++) {
+            finalData.append(key, value[i]);
           }
+        } else if (typeof value === 'string' || typeof value === 'number') {
+          finalData.append(key, value.toString());
         }
       }
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/submit-form`, {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+
+      const response = await fetch(`${API_URL}/api/submit-form`, {
         method: 'POST',
         body: finalData
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to submit form');
+        const errorText = await response.text(); // ✅ Lit le texte brut
+        throw new Error(`Server responded with ${response.status}: ${errorText}`);
       }
 
-      const result = await response.json();
-      toast.success(result.message || 'Form submitted successfully!');
-      reset();
+      const result = await response.json(); // ✅ Maintenant c’est safe
+      toast.success(result.message || 'Formulaire soumis avec succès !');
       setIsSubmitted(true);
+      reset();
 
-    } catch (error) {
-      let errorMessage = 'Failed to submit form. Please try again.';
-      
-      if (error instanceof Error) {
+    } catch (error: any) {
+      let errorMessage = 'Échec de l’envoi du formulaire.';
+      if (error.message) {
         errorMessage = error.message;
       }
-
-      console.error('Error submitting form:', error);
+      console.error('Erreur lors de la soumission:', errorMessage);
       toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
-  };
-
-// Helper pour typer les erreurs API
-
-
-
-  const goBack = () => {
-    setCurrentStep(prev => prev - 1);
-    window.scrollTo(0, 0);
   };
 
   return (
