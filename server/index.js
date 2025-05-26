@@ -23,6 +23,9 @@ const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
 
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  console.log(`✅ Dossier uploads créé: ${UPLOADS_DIR}`);
+} else {
+  console.log(`📁 Dossier uploads trouvé: ${UPLOADS_DIR}`);
 }
 
 // Connexion MongoDB
@@ -33,9 +36,9 @@ async function connectDB() {
       retryWrites: true,
       w: 'majority'
     });
-    console.log('MongoDB connected successfully');
+    console.log('✅ MongoDB connected successfully');
   } catch (err) {
-    console.error('MongoDB connection error:', err.message);
+    console.error('❌ MongoDB connection error:', err.message);
     process.exit(1);
   }
 }
@@ -142,7 +145,7 @@ app.addHook('onRequest', (req, reply, done) => {
   done();
 });
 
-// Route POST – ✅ Bien définie
+// Route POST principale
 app.post('/api/submit-form', async (req, reply) => {
   try {
     const body = {};
@@ -157,7 +160,9 @@ app.post('/api/submit-form', async (req, reply) => {
 
     for await (const part of req.parts()) {
       if (part.file && part.fieldname) {
-        const savePath = path.join(UPLOADS_DIR, `${Date.now()}-${part.filename}`);
+        const originalFilename = part.filename || 'unnamed';
+        const cleanFilename = originalFilename.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const savePath = path.join(UPLOADS_DIR, `${Date.now()}-${cleanFilename}`);
 
         try {
           const writeStream = fs.createWriteStream(savePath);
@@ -167,20 +172,24 @@ app.post('/api/submit-form', async (req, reply) => {
             part.file.on('error', reject);
           });
 
-          // Ajoute le fichier au formData
-          files[part.fieldname].push({
-            originalname: part.filename,
-            mimetype: part.mimetype,
-            size: part.file.bytesRead,
-            path: savePath,
-            filename: path.basename(savePath)
-          });
+          if (fs.existsSync(savePath)) {
+            files[part.fieldname].push({
+              originalname: originalFilename,
+              cleanname: cleanFilename,
+              mimetype: part.mimetype,
+              size: fs.statSync(savePath).size,
+              path: savePath,
+              filename: path.basename(savePath)
+            });
+          }
 
-        } catch (err) {
-          console.error(`❌ Échec lors de l’enregistrement du fichier ${part.filename}:`, err.message);
-          return reply.status(500).send({ success: false, message: 'File upload failed' });
+        } catch (fileError) {
+          console.error('Échec d’upload du fichier:', fileError.message);
+          return reply.status(500).send({ success: false, message: 'Erreur lors de l’upload du fichier' });
         }
+
       } else if (part.fieldname && typeof part.value === 'string') {
+        // Champ texte
         body[part.fieldname] = part.value;
       }
     }
@@ -205,7 +214,7 @@ app.post('/api/submit-form', async (req, reply) => {
     });
 
   } catch (error) {
-    console.error('Error submitting form:', error.message);
+    console.error('❌ Internal server error:', error.message);
     return reply.status(500).send({
       success: false,
       message: 'Internal server error'
@@ -245,7 +254,7 @@ app.setErrorHandler((error, req, reply) => {
   });
 });
 
-// Route inconnue – ✅ Bien implémentée
+// Route inconnue – Bien implémentée
 app.setNotFoundHandler((req, reply) => {
   return reply.status(404).send({
     success: false,
@@ -253,7 +262,7 @@ app.setNotFoundHandler((req, reply) => {
   });
 });
 
-// Démarrage du serveur – ✅ Doit être après toutes les routes
+// Démarrage du serveur – après toutes les routes
 const startServer = async () => {
   await connectDB();
 
