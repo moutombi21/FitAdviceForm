@@ -132,7 +132,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
         }
       }
 
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002';
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
       const response = await fetch(`${API_URL}/api/submit-form`, {
         method: 'POST',
@@ -140,11 +140,11 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
       });
 
       if (!response.ok) {
-        const errorText = await response.text(); // ✅ Lit le texte brut
+        const errorText = await response.text(); // 
         throw new Error(`Server responded with ${response.status}: ${errorText}`);
       }
 
-      const result = await response.json(); // ✅ Maintenant c’est safe
+      const result = await response.json(); 
       toast.success(result.message || 'Formulaire soumis avec succès !');
       setIsSubmitted(true);
       reset();

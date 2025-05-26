@@ -11,14 +11,14 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const sendEmail = async (submission) => {
   if (!process.env.RESEND_API_KEY) {
-    throw new Error('❌ RESEND_API_KEY manquant dans .env');
+    throw new Error('RESEND_API_KEY manquant dans .env');
   }
 
   try {
     const data = await resend.emails.send({
       from: process.env.EMAIL_FROM || 'admin@example.com',
       to: submission.email,
-      subject: '✅ Formulaire reçu !',
+      subject: 'Formulaire reçu !',
       html: `
         <h3>Nouvelle inscription</h3>
         <p><strong>Nom:</strong> ${submission.firstName} ${submission.lastName}</p>
@@ -27,9 +27,9 @@ export const sendEmail = async (submission) => {
       `,
     });
 
-    console.log('📧 Email envoyé via Resend:', data);
+    console.log('Email envoyé via Resend:', data);
   } catch (err) {
-    console.error("❌ Échec de l’envoi de l’e-mail:", err.message);
+    console.error("Échec de l’envoi de l’e-mail:", err.message);
     throw err;
   }
 };

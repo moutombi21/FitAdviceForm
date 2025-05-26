@@ -14,7 +14,7 @@ import { sendEmail } from './utils/sendEmail.js';
 dotenv.config({ path: './.env' });
 
 const app = fastify();
-const PORT = process.env.PORT || 5002;
+const PORT = process.env.PORT || 5001;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const MONGODB_URI = process.env.MONGODB_URI;
 
@@ -23,9 +23,9 @@ const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
 
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-  console.log(`✅ Dossier uploads créé: ${UPLOADS_DIR}`);
+  console.log(`Dossier uploads créé: ${UPLOADS_DIR}`);
 } else {
-  console.log(`📁 Dossier uploads trouvé: ${UPLOADS_DIR}`);
+  console.log(`Dossier uploads trouvé: ${UPLOADS_DIR}`);
 }
 
 // Connexion MongoDB
@@ -36,9 +36,9 @@ async function connectDB() {
       retryWrites: true,
       w: 'majority'
     });
-    console.log('✅ MongoDB connected successfully');
+    console.log('MongoDB connected successfully');
   } catch (err) {
-    console.error('❌ MongoDB connection error:', err.message);
+    console.error('MongoDB connection error:', err.message);
     process.exit(1);
   }
 }
