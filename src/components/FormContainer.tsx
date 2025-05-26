@@ -132,7 +132,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
         }
       }
 
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002';
 
       const response = await fetch(`${API_URL}/api/submit-form`, {
         method: 'POST',
