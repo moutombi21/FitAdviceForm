@@ -5,10 +5,7 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import multipart from '@fastify/multipart';
 import dotenv from 'dotenv';
-import fs from 'fs';
 import path from 'path';
-
-import { sendEmail } from './utils/sendEmail.js';
 
 // Charger les variables d'environnement
 dotenv.config({ path: './.env' });
@@ -18,16 +15,6 @@ const PORT = process.env.PORT || 5001;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const MONGODB_URI = process.env.MONGODB_URI;
 
-// Dossier uploads – à utiliser en développement seulement
-const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
-
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-  console.log(`Dossier uploads créé: ${UPLOADS_DIR}`);
-} else {
-  console.log(`Dossier uploads trouvé: ${UPLOADS_DIR}`);
-}
-
 // Connexion MongoDB
 async function connectDB() {
   try {
@@ -36,18 +23,18 @@ async function connectDB() {
       retryWrites: true,
       w: 'majority'
     });
-    console.log('MongoDB connected successfully');
+    console.log('✅ MongoDB connected successfully');
   } catch (err) {
-    console.error('MongoDB connection error:', err.message);
+    console.error('❌ MongoDB connection error:', err.message);
     process.exit(1);
   }
 }
 
-// Schéma Mongoose
+// Schéma Mongoose – simplifié pour éviter les erreurs
 const formSchema = new mongoose.Schema({
   firstName: String,
   lastName: String,
-  email: { type: String, unique: true },
+  email: { type: String, unique: false },
   phone: String,
 
   address: String,
@@ -65,44 +52,32 @@ const formSchema = new mongoose.Schema({
   identityDocument: [{
     originalname: String,
     mimetype: String,
-    size: Number,
-    path: String,
-    filename: String
+    size: Number // Taille estimée via part.file.bytesRead
   }],
   residencyProof: [{
     originalname: String,
     mimetype: String,
-    size: Number,
-    path: String,
-    filename: String
+    size: Number
   }],
   qualifications: [{
     originalname: String,
     mimetype: String,
-    size: Number,
-    path: String,
-    filename: String
+    size: Number
   }],
   businessPermit: [{
     originalname: String,
     mimetype: String,
-    size: Number,
-    path: String,
-    filename: String
+    size: Number
   }],
   liabilityInsurance: [{
     originalname: String,
     mimetype: String,
-    size: Number,
-    path: String,
-    filename: String
+    size: Number
   }],
   companyStatutes: [{
     originalname: String,
     mimetype: String,
-    size: Number,
-    path: String,
-    filename: String
+    size: Number
   }],
 
   ipAddress: String,
@@ -145,7 +120,7 @@ app.addHook('onRequest', (req, reply, done) => {
   done();
 });
 
-// Route POST principale
+// Route POST principale – soumission du formulaire
 app.post('/api/submit-form', async (req, reply) => {
   try {
     const body = {};
@@ -160,36 +135,13 @@ app.post('/api/submit-form', async (req, reply) => {
 
     for await (const part of req.parts()) {
       if (part.file && part.fieldname) {
-        const originalFilename = part.filename || 'unnamed';
-        const cleanFilename = originalFilename.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const savePath = path.join(UPLOADS_DIR, `${Date.now()}-${cleanFilename}`);
-
-        try {
-          const writeStream = fs.createWriteStream(savePath);
-          await new Promise((resolve, reject) => {
-            part.file.pipe(writeStream);
-            part.file.on('end', resolve);
-            part.file.on('error', reject);
-          });
-
-          if (fs.existsSync(savePath)) {
-            files[part.fieldname].push({
-              originalname: originalFilename,
-              cleanname: cleanFilename,
-              mimetype: part.mimetype,
-              size: fs.statSync(savePath).size,
-              path: savePath,
-              filename: path.basename(savePath)
-            });
-          }
-
-        } catch (fileError) {
-          console.error('Échec d’upload du fichier:', fileError.message);
-          return reply.status(500).send({ success: false, message: 'Erreur lors de l’upload du fichier' });
-        }
-
+        // Ne sauvegarde pas le fichier – juste les métadonnées
+        files[part.fieldname].push({
+          originalname: part.filename,
+          mimetype: part.mimetype,
+          size: part.file.bytesRead
+        });
       } else if (part.fieldname && typeof part.value === 'string') {
-        // Champ texte
         body[part.fieldname] = part.value;
       }
     }
@@ -203,11 +155,12 @@ app.post('/api/submit-form', async (req, reply) => {
 
     await submission.save();
 
-    await sendEmail(submission);
+    // Envoi d’e-mail (si tu utilises Resend)
+    // await sendEmail(submission);
 
     return reply.send({
       success: true,
-      message: 'Form submitted successfully!',
+      message: 'Formulaire soumis avec succès',
       data: {
         id: submission._id
       }
@@ -222,7 +175,7 @@ app.post('/api/submit-form', async (req, reply) => {
   }
 });
 
-// Route GET pour récupérer les soumissions
+// Route GET – récupérer les soumissions
 app.get('/api/submissions', async (req, reply) => {
   try {
     const submissions = await FormSubmission.find({})
@@ -254,7 +207,7 @@ app.setErrorHandler((error, req, reply) => {
   });
 });
 
-// Route inconnue – Bien implémentée
+// Route inconnue
 app.setNotFoundHandler((req, reply) => {
   return reply.status(404).send({
     success: false,
@@ -262,7 +215,7 @@ app.setNotFoundHandler((req, reply) => {
   });
 });
 
-// Démarrage du serveur – après toutes les routes
+// Démarrage du serveur
 const startServer = async () => {
   await connectDB();
 
