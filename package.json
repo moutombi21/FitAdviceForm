@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "echo 'No build required for this service'",
     "lint": "eslint .",
     "preview": "vite preview --port 5002",
     "server": "node server/index.js"
