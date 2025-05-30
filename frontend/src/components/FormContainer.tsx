@@ -5,17 +5,23 @@ import { CheckCircle2, AlertCircle, ChevronRight } from 'lucide-react';
 import { countries } from '../data/counstries';
 import { formTexts } from '../constants/formTexts';
 
+
 interface FormData {
+  // Personal Information
   firstName: string;
   lastName: string;
   email: string;
-  phone: string;
+  phone: string; 
   identityDocument: FileList;
+  
+  // Address Information
   address: string;
   city: string;
-  zipCode: string;
+  zipCode: string; 
   country: string;
   residencyProof: FileList;
+  
+  // Professional Information
   qualifications: FileList;
   businessPermit: FileList;
   liabilityInsurance: FileList;
@@ -23,6 +29,8 @@ interface FormData {
   vatNumber: string;
   bankDetails: string;
   companyStatutes: FileList;
+  
+  // Pricing Information
   hourlyRate: number;
   halfHourRate: number;
 }
@@ -32,38 +40,90 @@ interface FormContainerProps {
 }
 
 const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
-  const { register, handleSubmit, formState: { errors }, reset, getValues } = useForm<FormData>();
+  const { register, handleSubmit, formState: { errors }, reset } = useForm<FormData>();
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState<FormData | null>(null);
 
+  // initialisation de forData avec valeur par defaut
+  const [formData, setFormData] = useState<FormData>({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    zipCode: '',
+    country: '',
+    taxNumber: '',
+    vatNumber: '',
+    bankDetails: '',
+    hourlyRate: 0,
+    halfHourRate: 0,
+    identityDocument: new DataTransfer().files as FileList,
+    residencyProof: new DataTransfer().files as FileList,
+    qualifications: new DataTransfer().files as FileList,
+    businessPermit: new DataTransfer().files as FileList,
+    liabilityInsurance: new DataTransfer().files as FileList,
+    companyStatutes: new DataTransfer().files as FileList
+  });
+  
   const onSubmitStep1 = (data: Partial<FormData>) => {
-    setFormData(prev => ({ ...prev, ...data } as FormData));
+    setFormData({
+      ...formData,
+      firstName: data.firstName || formData.firstName,
+      lastName: data.lastName || formData.lastName,
+      email: data.email || formData.email,
+      identityDocument: data.identityDocument || formData.identityDocument
+    })
     setCurrentStep(2);
     window.scrollTo(0, 0);
   };
 
   const onSubmitStep2 = (data: Partial<FormData>) => {
-    setFormData(prev => ({ ...prev, ...data } as FormData));
+    setFormData({
+      ...formData, 
+      address: data.address || formData.address,
+      city: data.city || formData.city,
+      zipCode: data.zipCode || formData.zipCode,
+      country: data.country || formData.country,
+      residencyProof: data.residencyProof || formData.residencyProof
+    });
     setCurrentStep(3);
     window.scrollTo(0, 0);
   };
 
   const onSubmitStep3 = (data: Partial<FormData>) => {
-    setFormData(prev => ({ ...prev, ...data } as FormData));
+    setFormData({
+      ...formData,
+      taxNumber: data.taxNumber || formData.taxNumber,
+      vatNumber: data.vatNumber || formData.vatNumber,
+      bankDetails: data.bankDetails || formData.bankDetails,
+      hourlyRate: data.hourlyRate !== undefined ? data.hourlyRate : formData.hourlyRate,
+      halfHourRate: data.halfHourRate !== undefined ? data.halfHourRate : formData.halfHourRate,
+      qualifications: data.qualifications || formData.qualifications,
+      businessPermit: data.businessPermit || formData.businessPermit,
+      liabilityInsurance: data.liabilityInsurance || formData.liabilityInsurance,
+      companyStatutes: data.companyStatutes || formData.companyStatutes
+    });
     setCurrentStep(4);
+    window.scrollTo(0,0);
+  };
+
+  const goBack = () => {
+    setCurrentStep(currentStep - 1);
     window.scrollTo(0, 0);
   };
 
-  const onSubmitFinal = async () => {
+    const onSubmitFinal = async () => {
     try {
       setLoading(true);
+
       const finalData = new FormData();
-      const formData = getValues();
 
       for (const key in formData) {
         const value = (formData as any)[key];
-        if (value instanceof FileList) {
+
+        if (value instanceof FileList && value.length > 0) {
           for (let i = 0; i < value.length; i++) {
             finalData.append(key, value[i]);
           }
@@ -72,36 +132,33 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
         }
       }
 
-      const API_URL = import.meta.env.VITE_API_URL || "https://localhost:5001";
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002';
+
       const response = await fetch(`${API_URL}/api/submit-form`, {
         method: 'POST',
         body: finalData
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
+        const errorText = await response.text(); // ✅ Lit le texte brut
         throw new Error(`Server responded with ${response.status}: ${errorText}`);
       }
 
-      const result = await response.json();
-      toast.success(result.message || 'Form submitted successfully!');
-      reset();
+      const result = await response.json(); // ✅ Maintenant c’est safe
+      toast.success(result.message || 'Formulaire soumis avec succès !');
       setIsSubmitted(true);
-    } catch (error) {
-      let errorMessage = 'Failed to submit form. Please try again.';
-      if (error instanceof Error) {
+      reset();
+
+    } catch (error: any) {
+      let errorMessage = 'Échec de l’envoi du formulaire.';
+      if (error.message) {
         errorMessage = error.message;
       }
-      console.error('Error submitting form:', errorMessage);
+      console.error('Erreur lors de la soumission:', errorMessage);
       toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
-  };
-
-  const goBack = () => {
-    setCurrentStep(prev => prev - 1);
-    window.scrollTo(0, 0);
   };
 
   return (
@@ -111,7 +168,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
           <h2 className="text-xl font-semibold">Sports Coach Registration</h2>
           <p className="text-indigo-100">Please complete all required information</p>
         </div>
-
+        
         <div className="px-6 py-4 bg-gray-50 border-b">
           <div className="flex items-center">
             <div className={`flex items-center justify-center w-8 h-8 rounded-full ${currentStep >= 1 ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>1</div>
@@ -128,7 +185,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
             ))}
           </div>
         </div>
-
+        
         <div className="p-6">
           {currentStep === 1 && (
             <form onSubmit={handleSubmit(onSubmitStep1)}>
@@ -136,7 +193,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
-                      {formTexts.labels.firstName} *
+                      {formTexts.labels.firstName} *  
                     </label>
                     <input
                       id="firstName"
@@ -151,6 +208,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                       </p>
                     )}
                   </div>
+                  
                   <div>
                     <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
                       {formTexts.labels.lastName} *
@@ -179,7 +237,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                       id="email"
                       type="email"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${errors.email ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-indigo-200 focus:border-indigo-400'}`}
-                      {...register('email', {
+                      {...register('email', { 
                         required: formTexts.errors.emailRequired,
                         pattern: {
                           value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
@@ -194,6 +252,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                       </p>
                     )}
                   </div>
+                  
                   <div>
                     <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
                       {formTexts.labels.phone}
@@ -202,17 +261,17 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                       id="phone"
                       type="tel"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${errors.phone ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-indigo-200 focus:border-indigo-400'}`}
-                      {...register('phone', {
-                        required: formTexts.errors.phoneRequired,
-                        validate: {
-                          minLength: (value) =>
-                            value.replace(/\D/g, '').length >= 5 || formTexts.errors.phoneMin,
-                          maxLength: (value) =>
-                            value.replace(/\D/g, '').length <= 20 || formTexts.errors.phoneMax,
-                          validChars: (value) =>
-                            /^[\d\s+-]+$/.test(value) || formTexts.errors.phoneInvalid
-                        }
-                      })}
+                      {...register('phone', { 
+                          required: formTexts.errors.phoneRequired,
+                          validate: {
+                            minLength: (value) => 
+                              value.replace(/\D/g, '').length >= 5 || formTexts.errors.phoneMin,
+                            maxLength: (value) => 
+                              value.replace(/\D/g, '').length <= 20 || formTexts.errors.phoneMax,
+                            validChars: (value) =>
+                              /^[\d\s+-]+$/.test(value) || formTexts.errors.phoneInvalid
+                          }
+                        })}
                     />
                     {errors.phone && (
                       <p className="mt-1 text-sm text-red-600 flex items-center">
@@ -242,6 +301,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                   )}
                 </div>
               </div>
+              
               <div className="mt-8 flex justify-end">
                 <button
                   type="submit"
@@ -253,7 +313,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
               </div>
             </form>
           )}
-
+          
           {currentStep === 2 && (
             <form onSubmit={handleSubmit(onSubmitStep2)}>
               <div className="grid grid-cols-1 gap-6">
@@ -274,7 +334,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                     </p>
                   )}
                 </div>
-
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">City *</label>
@@ -291,6 +351,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                       </p>
                     )}
                   </div>
+                  
                   <div>
                     <label htmlFor="zipCode" className="block text-sm font-medium text-gray-700 mb-1">ZIP Code *</label>
                     <input
@@ -349,6 +410,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                   )}
                 </div>
               </div>
+              
               <div className="mt-8 flex justify-between">
                 <button
                   type="button"
@@ -367,7 +429,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
               </div>
             </form>
           )}
-
+          
           {currentStep === 3 && (
             <form onSubmit={handleSubmit(onSubmitStep3)}>
               <div className="grid grid-cols-1 gap-6">
@@ -389,6 +451,19 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                       {errors.qualifications.message}
                     </p>
                   )}
+                </div>
+
+                <div>
+                  <label htmlFor="businessPermit" className="block text-sm font-medium text-gray-700 mb-1">
+                    Business Permit
+                  </label>
+                  <input
+                    id="businessPermit"
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 border-gray-300 focus:ring-indigo-200"
+                    {...register('businessPermit')}
+                  />
                 </div>
 
                 <div>
@@ -426,21 +501,45 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                       </p>
                     )}
                   </div>
+                  
                   <div>
-                    <label htmlFor="bankDetails" className="block text-sm font-medium text-gray-700 mb-1">Bank Details (IBAN) *</label>
+                    <label htmlFor="vatNumber" className="block text-sm font-medium text-gray-700 mb-1">VAT Number</label>
                     <input
-                      id="bankDetails"
+                      id="vatNumber"
                       type="text"
-                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${errors.bankDetails ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-indigo-200 focus:border-indigo-400'}`}
-                      {...register('bankDetails', { required: 'Bank details are required' })}
+                      className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 border-gray-300 focus:ring-indigo-200"
+                      {...register('vatNumber')}
                     />
-                    {errors.bankDetails && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-1" />
-                        {errors.bankDetails.message}
-                      </p>
-                    )}
                   </div>
+                </div>
+
+                <div>
+                  <label htmlFor="bankDetails" className="block text-sm font-medium text-gray-700 mb-1">Bank Details (IBAN) *</label>
+                  <input
+                    id="bankDetails"
+                    type="text"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${errors.bankDetails ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-indigo-200 focus:border-indigo-400'}`}
+                    {...register('bankDetails', { required: 'Bank details are required' })}
+                  />
+                  {errors.bankDetails && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center">
+                      <AlertCircle className="h-4 w-4 mr-1" />
+                      {errors.bankDetails.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="companyStatutes" className="block text-sm font-medium text-gray-700 mb-1">
+                    Company Statutes (if applicable)
+                  </label>
+                  <input
+                    id="companyStatutes"
+                    type="file"
+                    accept=".pdf"
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 border-gray-300 focus:ring-indigo-200"
+                    {...register('companyStatutes')}
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -452,7 +551,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                         type="number"
                         step="0.01"
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${errors.hourlyRate ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-indigo-200 focus:border-indigo-400'}`}
-                        {...register('hourlyRate', {
+                        {...register('hourlyRate', { 
                           required: 'Hourly rate is required',
                           min: { value: 0, message: 'Rate must be positive' }
                         })}
@@ -466,6 +565,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                       </p>
                     )}
                   </div>
+                  
                   <div>
                     <label htmlFor="halfHourRate" className="block text-sm font-medium text-gray-700 mb-1">Half-Hour Rate (excl. VAT) *</label>
                     <div className="relative">
@@ -474,7 +574,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                         type="number"
                         step="0.01"
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${errors.halfHourRate ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-indigo-200 focus:border-indigo-400'}`}
-                        {...register('halfHourRate', {
+                        {...register('halfHourRate', { 
                           required: 'Half-hour rate is required',
                           min: { value: 0, message: 'Rate must be positive' }
                         })}
@@ -490,6 +590,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                   </div>
                 </div>
               </div>
+              
               <div className="mt-8 flex justify-between">
                 <button
                   type="button"
@@ -508,14 +609,14 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
               </div>
             </form>
           )}
-
+          
           {currentStep === 4 && formData && (
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-4">Review Your Information</h3>
               <div className="bg-indigo-50 rounded-lg p-4 mb-6">
-                <p className="text-sm text-indigo-800">Please review your information before submitting. Once submitted, you won't be able to make changes.</p>
+                <p className="text-sm text-indigo-800 mb-2">Please review your information before submitting. Once submitted, you won't be able to make changes.</p>
               </div>
-
+              
               <div className="space-y-6">
                 <div>
                   <h4 className="text-sm font-medium text-gray-500 mb-2">Personal Information</h4>
@@ -535,12 +636,12 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                       </div>
                       <div>
                         <p className="text-xs text-gray-500">Phone</p>
-                        <p className="font-medium">{formData.phone}</p>
+                        <p className="font-medium">{formData.phone.toString()}</p>
                       </div>
                     </div>
                   </div>
                 </div>
-
+                
                 <div>
                   <h4 className="text-sm font-medium text-gray-500 mb-2">Address Information</h4>
                   <div className="bg-white border border-gray-200 rounded-md p-4">
@@ -555,7 +656,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                       </div>
                       <div>
                         <p className="text-xs text-gray-500">ZIP Code</p>
-                        <p className="font-medium">{formData.zipCode}</p>
+                        <p className="font-medium">{formData.zipCode.toString()}</p>
                       </div>
                       <div className="md:col-span-2">
                         <p className="text-xs text-gray-500">Country</p>
@@ -629,7 +730,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                   </div>
                 </div>
               </div>
-
+              
               <div className="mt-8 flex justify-between">
                 <button
                   type="button"
@@ -648,7 +749,7 @@ const FormContainer: React.FC<FormContainerProps> = ({ setIsSubmitted }) => {
                     <>
                       <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v8z"></path>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
                       Processing...
                     </>
